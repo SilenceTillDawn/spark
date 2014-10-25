@@ -78,10 +78,14 @@ object BlockFetcherIterator {
       private val blockManager: BlockManager,
       val blocksByAddress: Seq[(BlockManagerId, Seq[(BlockId, Long)])],
       serializer: Serializer,
-      readMetrics: ShuffleReadMetrics)
+      readMetrics: ShuffleReadMetrics,
+      shuffleId: Int = -1, reduceId: Int = -1)
     extends BlockFetcherIterator {
 
     import blockManager._
+
+    private val shuffle_id = shuffleId
+    private val reduce_id = reduceId
 
     if (blocksByAddress == null) {
       throw new IllegalArgumentException("BlocksByAddress is null")
@@ -109,6 +113,8 @@ object BlockFetcherIterator {
     protected var bytesInFlight = 0L
 
     protected def sendRequest(req: FetchRequest) {
+      logInfo("<TE>:" + " shuffle_id=" + shuffle_id + " reduce_id=" + reduce_id + " blocks="
+        + req.blocks.size + " size=" + req.size + " host=" + req.address.hostPort)
       logDebug("Sending request for %d blocks (%s) from %s".format(
         req.blocks.size, Utils.bytesToString(req.size), req.address.hostPort))
       val cmId = new ConnectionManagerId(req.address.host, req.address.port)
@@ -117,7 +123,8 @@ object BlockFetcherIterator {
       })
       bytesInFlight += req.size
       val sizeMap = req.blocks.toMap  // so we can look up the size of each blockID
-      val future = connectionManager.sendMessageReliably(cmId, blockMessageArray.toBufferMessage)
+      val future = connectionManager.sendMessageReliably(cmId, blockMessageArray.toBufferMessage,
+          shuffleId, reduceId)
       future.onComplete {
         case Success(message) => {
           val bufferMessage = message.asInstanceOf[BufferMessage]
