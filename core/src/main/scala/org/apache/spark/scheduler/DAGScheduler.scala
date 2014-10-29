@@ -101,6 +101,9 @@ class DAGScheduler(
 
   private[scheduler] val activeJobs = new HashSet[ActiveJob]
 
+  private[scheduler] val stageDep = new HashMap[Stage, Stage]
+  private[scheduler] val stageDepMap = new HashMap[Int, List[Int]]
+
   // Contains the locations that each RDD's partitions are cached on
   private val cacheLocs = new HashMap[Int, Array[Seq[TaskLocation]]]
 
@@ -493,6 +496,10 @@ class DAGScheduler(
     assert(partitions.size > 0)
     val func2 = func.asInstanceOf[(TaskContext, Iterator[_]) => _]
     val waiter = new JobWaiter(this, jobId, partitions.size, resultHandler)
+
+    stageDep.clear()
+    stageDepMap.clear()
+
     eventProcessActor ! JobSubmitted(
       jobId, rdd, func2, partitions.toArray, allowLocal, callSite, waiter, properties)
     waiter
@@ -710,6 +717,26 @@ class DAGScheduler(
     submitWaitingStages()
   }
 
+  /** Job Analysis, output stages */
+  private def jobAnalysis(stage: Stage): Unit = {
+    def wrapper(stage: Stage): Unit = {
+      val jobId = activeJobForStage(stage)
+      if (jobId.isDefined) {
+        logInfo("<TE>:Start_Job_Analysis job_id=" + jobId) //Add job id and shuffle id
+        val missing = getMissingParentStages(stage).sortBy(_.id)
+        if (!waitingStages(stage) && !runningStages(stage) && !failedStages(stage)) {
+          if (missing != Nil) {
+            for (parent <- missing) {
+              stageDepMap(stage.id) = missing.map(stage => stage.id)
+              stageDep(parent) = stage
+              wrapper(parent)
+            }
+          }
+        }
+      }
+    }
+    wrapper(stage)
+  }
   private[scheduler] def handleJobSubmitted(jobId: Int,
       finalRDD: RDD[_],
       func: (TaskContext, Iterator[_]) => _,
@@ -748,6 +775,12 @@ class DAGScheduler(
         jobIdToActiveJob(jobId) = job
         activeJobs += job
         finalStage.resultOfJob = Some(job)
+
+        jobAnalysis(finalStage)
+        logInfo("<TE>: Stages Dependencies: " + stageDep.toString)
+        logInfo("<TE>: StagesMap Dependencies: " + stageDepMap.toString)
+
+
         listenerBus.post(SparkListenerJobStart(job.jobId, jobIdToStageIds(jobId).toArray,
           properties))
         submitStage(finalStage)

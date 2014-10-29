@@ -30,9 +30,6 @@ abstract class Connection(val channel: SocketChannel, val selector: Selector,
     val socketRemoteConnectionManagerId: ConnectionManagerId, val connectionId: ConnectionId)
   extends Logging {
 
-  var shuffleId: Int = -1
-  var reduceId: Int = -1
-
   var sparkSaslServer: SparkSaslServer = null
   var sparkSaslClient: SparkSaslClient = null
 
@@ -276,14 +273,10 @@ class SendingConnection(val address: InetSocketAddress, selector_ : Selector,
     changeConnectionKeyInterest(DEFAULT_INTEREST)
   }
 
-  def send(message: Message, shuffleId: Int = -1, reduceId: Int = -1) {
-    if (shuffleId != -1) {
-      if (shuffleId != this.shuffleId) {
-        this.shuffleId = shuffleId
-        this.reduceId = reduceId
-        val shuffleCode = (shuffleId + 1) * 4
-        channel.setOption(StandardSocketOptions.IP_TOS, shuffleCode: java.lang.Integer)
-      }
+  def send(message: Message, stageId: Int = -1) {
+    if (stageId != -1) {
+      val shuffleCode = (stageId % 63 + 1) * 4
+      channel.setOption(StandardSocketOptions.IP_TOS, shuffleCode: java.lang.Integer)
     } else {
       channel.setOption(StandardSocketOptions.IP_TOS, 0: java.lang.Integer)
     }

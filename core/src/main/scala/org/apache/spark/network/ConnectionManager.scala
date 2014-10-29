@@ -769,7 +769,7 @@ private[spark] class ConnectionManager(
   }
 
   private def sendMessage(connectionManagerId: ConnectionManagerId, message: Message,
-                          shuffleId: Int = -1, reduceId: Int = -1) {
+                          stageId: Int = -1) {
     def startNewConnection(): SendingConnection = {
       val inetSocketAddress = new InetSocketAddress(connectionManagerId.host,
         connectionManagerId.port)
@@ -828,7 +828,7 @@ private[spark] class ConnectionManager(
       }
     }
     logDebug("Sending [" + message + "] to [" + connectionManagerId + "]")
-    connection.send(message, shuffleId, reduceId)
+    connection.send(message, stageId)
 
     wakeupSelector()
   }
@@ -844,7 +844,7 @@ private[spark] class ConnectionManager(
    * @return a Future that either returns the acknowledgment message or captures an exception.
    */
   def sendMessageReliably(connectionManagerId: ConnectionManagerId, message: Message,
-                          shuffleId: Int = -1, reduceId: Int = -1)
+                          stageId: Int = -1)
       : Future[Message] = {
     val promise = Promise[Message]()
 
@@ -879,7 +879,7 @@ private[spark] class ConnectionManager(
     }
 
     ackTimeoutMonitor.schedule(timeoutTask, ackTimeout * 1000)
-    sendMessage(connectionManagerId, message, shuffleId, reduceId)
+    sendMessage(connectionManagerId, message, stageId)
     promise.future
   }
 

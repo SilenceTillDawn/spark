@@ -572,14 +572,14 @@ private[spark] class BlockManager(
       blocksByAddress: Seq[(BlockManagerId, Seq[(BlockId, Long)])],
       serializer: Serializer,
       readMetrics: ShuffleReadMetrics,
-      shuffleId: Int = -1, reduceId: Int = -1): BlockFetcherIterator = {
+      stageId: Int = -1): BlockFetcherIterator = {
     val iter =
       if (conf.getBoolean("spark.shuffle.use.netty", false)) {
         new BlockFetcherIterator.NettyBlockFetcherIterator(this, blocksByAddress, serializer,
           readMetrics)
       } else {
         new BlockFetcherIterator.BasicBlockFetcherIterator(this, blocksByAddress, serializer,
-          readMetrics, shuffleId, reduceId)
+          readMetrics, stageId)
       }
     iter.initialize()
     iter
